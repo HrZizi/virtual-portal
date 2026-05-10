@@ -30,8 +30,7 @@ void Logger::Log(LogLevel level, const std::string& message) {
     if (s_file.is_open()) {
         s_file << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S")
                << " [" << levelStr << "] " << message << '\n';
-        // No per-line flush — the game polls ReadFile thousands of times/sec.
-        // Flushing on every log entry was the primary cause of the 1GB log explosion.
-        // The file is flushed + closed properly when the DLL is unloaded.
+        s_file.flush(); // Flush explicitly to avoid log loss on crash
+
     }
 }

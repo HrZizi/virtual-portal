@@ -4,6 +4,7 @@
 #include "logging.h"
 #include "config.h"
 #include "figure_manager.h"
+#include "graphics_hooks.h"
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -42,6 +43,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         // 5. Install Hooks
         HookManager::Install();
+        GraphicsHooks::Install();
         
         LOG_INFO("DLL_PROCESS_ATTACH completed successfully");
         break;
