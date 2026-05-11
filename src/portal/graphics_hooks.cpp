@@ -40,6 +40,7 @@ GraphicsHooks::PSetRenderTarget GraphicsHooks::oSetRenderTarget = nullptr;
 GraphicsHooks::PSetWindowPos GraphicsHooks::oSetWindowPos = nullptr;
 GraphicsHooks::PSetWindowLongA GraphicsHooks::oSetWindowLongA = nullptr;
 GraphicsHooks::PSetWindowLongW GraphicsHooks::oSetWindowLongW = nullptr;
+GraphicsHooks::PClipCursor GraphicsHooks::oClipCursor = nullptr;
 
 WNDPROC GraphicsHooks::oWndProc = nullptr;
 HWND GraphicsHooks::g_hGameWindow = nullptr;
@@ -49,6 +50,9 @@ static float g_screenHeight = 0.0f;
 
 static float g_currentRTWidth = 0.0f;
 static float g_currentRTHeight = 0.0f;
+
+static RECT g_desiredClipRect = {0};
+static bool g_hasClipRect = false;
 
 LRESULT CALLBACK GraphicsHooks::Hooked_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if (Config::Get().GetBool("graphics", "borderless_window", false) && hWnd == g_hGameWindow) {
@@ -225,7 +229,37 @@ HRESULT WINAPI GraphicsHooks::Hooked_Reset(IDirect3DDevice9* pDevice, D3DPRESENT
 }
 
 HRESULT WINAPI GraphicsHooks::Hooked_EndScene(IDirect3DDevice9* pDevice) {
+    static HWND lastForegroundWnd = NULL;
+    HWND currentForegroundWnd = GetForegroundWindow();
+    
+    if (currentForegroundWnd != lastForegroundWnd) {
+        lastForegroundWnd = currentForegroundWnd;
+        if (currentForegroundWnd != g_hGameWindow) {
+            // Game lost focus, free cursor
+            if (oClipCursor) oClipCursor(NULL);
+        } else if (g_hasClipRect) {
+            // Game gained focus, restore its desired clip rect
+            if (oClipCursor) oClipCursor(&g_desiredClipRect);
+        }
+    }
     return oEndScene(pDevice);
+}
+
+BOOL WINAPI GraphicsHooks::Hooked_ClipCursor(const RECT* lpRect) {
+    if (lpRect) {
+        g_desiredClipRect = *lpRect;
+        g_hasClipRect = true;
+    } else {
+        g_hasClipRect = false;
+    }
+
+    if (Config::Get().GetBool("graphics", "borderless_window", false) && g_hGameWindow) {
+        if (GetForegroundWindow() != g_hGameWindow) {
+            // We don't have focus. Always free the cursor.
+            return oClipCursor(NULL);
+        }
+    }
+    return oClipCursor(lpRect);
 }
 
 BOOL WINAPI GraphicsHooks::Hooked_SetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags) {
@@ -259,5 +293,6 @@ void GraphicsHooks::Install() {
     MH_CreateHookApi(L"user32.dll", "SetWindowPos", &Hooked_SetWindowPos, reinterpret_cast<LPVOID*>(&oSetWindowPos));
     MH_CreateHookApi(L"user32.dll", "SetWindowLongA", &Hooked_SetWindowLongA, reinterpret_cast<LPVOID*>(&oSetWindowLongA));
     MH_CreateHookApi(L"user32.dll", "SetWindowLongW", &Hooked_SetWindowLongW, reinterpret_cast<LPVOID*>(&oSetWindowLongW));
+    MH_CreateHookApi(L"user32.dll", "ClipCursor", &Hooked_ClipCursor, reinterpret_cast<LPVOID*>(&oClipCursor));
     MH_EnableHook(MH_ALL_HOOKS);
 }

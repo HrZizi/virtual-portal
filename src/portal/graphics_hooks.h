@@ -25,6 +25,7 @@ private:
     static BOOL WINAPI Hooked_SetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
     static LONG WINAPI Hooked_SetWindowLongA(HWND hWnd, int nIndex, LONG dwNewLong);
     static LONG WINAPI Hooked_SetWindowLongW(HWND hWnd, int nIndex, LONG dwNewLong);
+    static BOOL WINAPI Hooked_ClipCursor(const RECT* lpRect);
 
     // WndProc to prevent minimization
     static LRESULT CALLBACK Hooked_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -42,6 +43,7 @@ private:
     typedef BOOL(WINAPI* PSetWindowPos)(HWND, HWND, int, int, int, int, UINT);
     typedef LONG(WINAPI* PSetWindowLongA)(HWND, int, LONG);
     typedef LONG(WINAPI* PSetWindowLongW)(HWND, int, LONG);
+    typedef BOOL(WINAPI* PClipCursor)(const RECT*);
 
     static PDirect3DCreate9 oDirect3DCreate9;
     static PCreateDevice oCreateDevice;
@@ -56,6 +58,7 @@ private:
     static PSetWindowPos oSetWindowPos;
     static PSetWindowLongA oSetWindowLongA;
     static PSetWindowLongW oSetWindowLongW;
+    static PClipCursor oClipCursor;
     
     static WNDPROC oWndProc;
     static HWND g_hGameWindow;
