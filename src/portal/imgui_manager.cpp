@@ -214,12 +214,14 @@ bool ImGuiManager::HandleWndProc(HWND hWnd, UINT msg, WPARAM wParam,
 // DrawPortalManager — Main overlay window
 // ---------------------------------------------------------------------------
 void ImGuiManager::DrawPortalManager() {
-  ImGui::SetNextWindowSize(ImVec2(380 * m_uiScale, 0), ImGuiCond_FirstUseEver);
+  // Use fixed width constraints to prevent jittering when status text changes
+  float fixedWidth = 380.0f * m_uiScale;
+  ImGui::SetNextWindowSizeConstraints(ImVec2(fixedWidth, -1),
+                                      ImVec2(fixedWidth, -1));
   ImGui::SetNextWindowPos(ImVec2(20 * m_uiScale, 20 * m_uiScale),
                           ImGuiCond_FirstUseEver);
 
-  ImGuiWindowFlags flags =
-      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
   if (!ImGui::Begin("Virtual Portal Manager", &m_visible, flags)) {
     ImGui::End();
     return;
@@ -287,39 +289,48 @@ void ImGuiManager::DrawSlotCard(UISlot &uiSlot) {
   ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize,
                       slot.occupied ? 2.0f : 1.0f);
 
-  float cardHeight = (slot.occupied ? 80.0f : 55.0f) * m_uiScale;
-  ImGui::BeginChild(uiSlot.label, ImVec2(-1, cardHeight),
-                    ImGuiChildFlags_Borders);
+  // Use AutoResizeY to prevent scrollbars and ensure the card renders everything at once
+  ImGui::BeginChild(uiSlot.label, ImVec2(-1, 0),
+                    ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
 
-  // Slot label
+  // Slot label (top left)
   ImGui::TextColored(ImVec4(0.7f, 0.65f, 0.80f, 1.0f), "%s", uiSlot.label);
 
   bool wantOpenSelector = false;
 
   if (slot.occupied) {
-    // Occupied: show character info
-    ImVec4 elemColor = GetElementColor(slot.element);
-    ImGui::TextColored(elemColor, "%s %s",
-                       GetElementEmoji(slot.element.c_str()),
-                       slot.char_name.c_str());
-
-    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 70 * m_uiScale);
-
+    // --- Remove Button (Top Right) ---
+    // Align to the right edge minus button width
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 45 * m_uiScale);
+    
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.15f, 0.15f, 0.7f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          ImVec4(0.8f, 0.2f, 0.2f, 0.9f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          ImVec4(1.0f, 0.25f, 0.25f, 1.0f));
-    if (ImGui::Button("Remove", ImVec2(70 * m_uiScale, 0))) {
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.2f, 0.2f, 0.9f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.25f, 0.25f, 1.0f));
+    
+    // Smaller "X" button for quick removal
+    if (ImGui::Button("X", ImVec2(40 * m_uiScale, 20 * m_uiScale))) {
       FigureManager::Get().RemoveFigure(uiSlot.fmSlot);
       PortalState::SaveCurrentState();
       LOG_INFO("Removed figure from UI slot: " + std::string(uiSlot.label));
     }
     ImGui::PopStyleColor(3);
 
-    if (slot.dirty) {
-      ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 0.7f), "(unsaved changes)");
+    // --- Character Info (Below Slot Label) ---
+    ImVec4 elemColor = GetElementColor(slot.element);
+    ImGui::TextColored(elemColor, "%s %s",
+                       GetElementEmoji(slot.element.c_str()),
+                       slot.char_name.c_str());
+    
+    // Make the character name clickable to swap
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+      ImGui::SetTooltip("Click to swap character");
+      if (ImGui::IsMouseClicked(0)) {
+        wantOpenSelector = true;
+      }
     }
+    
+    // Note: "(unsaved changes)" text removed per user request
   } else {
     // Empty: clickable area to open selector
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -327,9 +338,13 @@ void ImGuiManager::DrawSlotCard(UISlot &uiSlot) {
                           ImVec4(0.3f, 0.2f, 0.5f, 0.3f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           ImVec4(0.4f, 0.3f, 0.6f, 0.5f));
-    if (ImGui::Button("Click to select a character...", ImVec2(-1, 0))) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+    // Fixed height for empty slot button to maintain some card presence
+    // Shortened text as requested
+    if (ImGui::Button("Select Character...", ImVec2(-1, 30 * m_uiScale))) {
       wantOpenSelector = true;
     }
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
   }
 
