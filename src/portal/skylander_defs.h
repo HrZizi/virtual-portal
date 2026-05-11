@@ -50,13 +50,30 @@ static const SkylanderDef SSA_CHARACTERS[] = {
     { 29, "Hex",            "Undead" },
     { 30, "Cynder",         "Undead" },
     { 31, "Chop Chop",      "Undead" },
+
+    // Magic Items (SSA)
+    { 200, "Anvil Rain",          "Items" },
+    { 201, "Sky-Iron Shield",     "Items" },
+    { 202, "Healing Elixir",      "Items" },
+    { 203, "Time Twister",        "Items" },
+    { 204, "Ghost Pirate Swords", "Items" },
+    { 205, "Sparx the Dragonfly", "Items" },
+    { 206, "Winged Boots",        "Items" },
+    { 207, "Hidden Treasure",     "Items" },
+
+    // Expansion Packs / Locations
+    { 400, "Dragon's Peak",       "Items" },
+    { 401, "Empire of Ice",       "Items" },
+    { 402, "Pirate Seas",         "Items" },
+    { 403, "Darklight Crypt",     "Items" },
+    { 404, "Volcanic Vault",      "Items" },
 };
 
 static constexpr size_t SSA_CHARACTER_COUNT = sizeof(SSA_CHARACTERS) / sizeof(SSA_CHARACTERS[0]);
 
 // Element list for UI categorization
 static const char* SSA_ELEMENTS[] = {
-    "Air", "Earth", "Fire", "Water", "Magic", "Tech", "Life", "Undead"
+    "Air", "Earth", "Fire", "Water", "Magic", "Tech", "Life", "Undead", "Items"
 };
 static constexpr size_t SSA_ELEMENT_COUNT = sizeof(SSA_ELEMENTS) / sizeof(SSA_ELEMENTS[0]);
 

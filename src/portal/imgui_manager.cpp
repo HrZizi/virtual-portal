@@ -34,6 +34,8 @@ static ImVec4 GetElementColor(const std::string &element) {
     return ImVec4(0.25f, 0.80f, 0.25f, 1.0f); // green
   if (element == "Undead")
     return ImVec4(0.45f, 0.45f, 0.55f, 1.0f); // dark grey-blue
+  if (element == "Items")
+    return ImVec4(0.70f, 0.70f, 0.70f, 1.0f); // silver/grey
   return ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 }
 
@@ -54,6 +56,8 @@ static const char *GetElementEmoji(const char *element) {
     return "[Life]";
   if (strcmp(element, "Undead") == 0)
     return "[Undead]";
+  if (strcmp(element, "Items") == 0)
+    return "[Item]";
   return "[?]";
 }
 
