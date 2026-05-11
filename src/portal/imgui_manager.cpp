@@ -340,7 +340,9 @@ void ImGuiManager::DrawSlotCard(UISlot &uiSlot) {
   // Open popup at PARENT window level (same scope as BeginPopupModal)
   if (wantOpenSelector) {
     uiSlot.selectorOpen = true;
-    ImGui::OpenPopup("Select Character");
+    char popupId[64];
+    snprintf(popupId, sizeof(popupId), "Select Character##%d", uiSlot.fmSlot);
+    ImGui::OpenPopup(popupId);
   }
 
   // Character selector modal — always call so ImGui can find the popup
@@ -354,7 +356,10 @@ void ImGuiManager::DrawCharacterSelector(UISlot &uiSlot) {
   ImGui::SetNextWindowSize(ImVec2(420 * m_uiScale, 520 * m_uiScale),
                            ImGuiCond_FirstUseEver);
 
-  if (ImGui::BeginPopupModal("Select Character", &uiSlot.selectorOpen,
+  char popupId[64];
+  snprintf(popupId, sizeof(popupId), "Select Character##%d", uiSlot.fmSlot);
+
+  if (ImGui::BeginPopupModal(popupId, &uiSlot.selectorOpen,
                              ImGuiWindowFlags_NoResize)) {
     ImGui::TextColored(ImVec4(0.65f, 0.45f, 0.90f, 1.0f),
                        "Choose a Skylander for %s", uiSlot.label);
