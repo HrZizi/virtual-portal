@@ -5,6 +5,7 @@
 #include "config.h"
 #include "figure_manager.h"
 #include "graphics_hooks.h"
+#include "portal_state.h"
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -35,13 +36,28 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             return FALSE;
         }
 
-        // 4. Initialize Figure Manager & Load initial figure from config
-        std::string initialSky = Config::Get().GetString("figures", "slot_0", "");
-        if (!initialSky.empty()) {
-            FigureManager::Get().LoadFigure(0, initialSky);
+        // 4. Load portal state — restore previous slot selections
+        auto savedSlots = PortalState::Load();
+        if (!savedSlots.empty()) {
+            for (const auto& entry : savedSlots) {
+                if (entry.charId != 0xFFFF && entry.slot < 3) {
+                    FigureManager::Get().LoadCharacter(entry.slot, entry.charId);
+                }
+            }
+            LOG_INFO("Restored " + std::to_string(savedSlots.size()) + " slots from portal_state.ini");
+        } else {
+            // Fallback: try legacy portal_config.ini [figures] section
+            std::string initialSky = Config::Get().GetString("figures", "slot_0", "");
+            if (!initialSky.empty()) {
+                FigureManager::Get().LoadFigure(0, initialSky);
+                LOG_INFO("Loaded legacy figure from portal_config.ini");
+            }
         }
 
-        // 5. Install Hooks
+        // 5. Start background flush thread (30-second interval)
+        FigureManager::Get().StartFlushThread();
+
+        // 6. Install Hooks
         HookManager::Install();
         GraphicsHooks::Install();
         
@@ -50,9 +66,19 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     }
     case DLL_PROCESS_DETACH:
         LOG_INFO("--- Virtual Portal Emulator Shutting Down ---");
+        
+        // Stop flush thread first (waits for it to finish)
+        FigureManager::Get().StopFlushThread();
+        
+        // Final synchronous flush of any remaining dirty buffers
         FigureManager::Get().FlushAll();
+        
+        // Persist current slot state for next launch
+        PortalState::SaveCurrentState();
+        
         HookManager::Uninstall();
         DInput8Proxy::Shutdown();
+        LOG_INFO("Shutdown complete");
         break;
     }
     return TRUE;

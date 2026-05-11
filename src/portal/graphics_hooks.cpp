@@ -55,6 +55,10 @@ static RECT g_desiredClipRect = {0};
 static bool g_hasClipRect = false;
 
 LRESULT CALLBACK GraphicsHooks::Hooked_WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    // ImGui input handling (must come first so INSERT toggle works)
+    if (ImGuiManager::Get().HandleWndProc(hWnd, uMsg, wParam, lParam))
+        return true;
+
     if (Config::Get().GetBool("graphics", "borderless_window", false) && hWnd == g_hGameWindow) {
         switch (uMsg) {
             case WM_ACTIVATE: if (LOWORD(wParam) == WA_INACTIVE) return 0; break;
@@ -212,14 +216,24 @@ HRESULT WINAPI GraphicsHooks::Hooked_CreateDevice(IDirect3D9* pThis, UINT Adapte
             MH_EnableHook(vTable[37]);
         }
         GfxLog("RT-Aware UI Scissor hooks installed");
+
+        // Initialize ImGui overlay
+        HWND imguiWnd = hFocusWindow ? hFocusWindow : pPresentationParameters->hDeviceWindow;
+        ImGuiManager::Get().Initialize(*ppReturnedDeviceInterface, imguiWnd);
     }
     return hr;
 }
 
 HRESULT WINAPI GraphicsHooks::Hooked_Reset(IDirect3DDevice9* pDevice, D3DPRESENT_PARAMETERS* pPresentationParameters) {
+    // Invalidate ImGui device objects before Reset
+    ImGuiManager::Get().InvalidateDeviceObjects();
+
     UpdatePresentationParameters(pPresentationParameters);
     HRESULT hr = oReset(pDevice, pPresentationParameters);
     if (SUCCEEDED(hr)) {
+        // Recreate ImGui device objects after Reset
+        ImGuiManager::Get().CreateDeviceObjects();
+
         D3DDEVICE_CREATION_PARAMETERS cp;
         if (SUCCEEDED(pDevice->GetCreationParameters(&cp))) {
             ApplyBorderless(cp.hFocusWindow);
@@ -242,6 +256,10 @@ HRESULT WINAPI GraphicsHooks::Hooked_EndScene(IDirect3DDevice9* pDevice) {
             if (oClipCursor) oClipCursor(&g_desiredClipRect);
         }
     }
+
+    // Render ImGui overlay (before EndScene returns to Present)
+    ImGuiManager::Get().Render(pDevice);
+
     return oEndScene(pDevice);
 }
 

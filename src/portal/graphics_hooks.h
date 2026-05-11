@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <d3d9.h>
+#include "imgui_manager.h"
 
 class GraphicsHooks {
 public:
@@ -61,5 +62,8 @@ private:
     static PClipCursor oClipCursor;
     
     static WNDPROC oWndProc;
+
+public:
+    // Exposed for ImGuiManager integration
     static HWND g_hGameWindow;
 };
