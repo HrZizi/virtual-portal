@@ -1,4 +1,5 @@
 #include "dinput8_proxy.h"
+#include "hook_manager.h"
 #include "imgui_manager.h"
 #include "logging.h"
 #include <MinHook.h>
@@ -14,6 +15,23 @@ DInput8Proxy::PDllUnregisterServer DInput8Proxy::oDllUnregisterServer = nullptr;
 DInput8Proxy::PCreateDevice DInput8Proxy::oCreateDevice = nullptr;
 DInput8Proxy::PGetDeviceState DInput8Proxy::oGetDeviceState = nullptr;
 DInput8Proxy::PGetDeviceData DInput8Proxy::oGetDeviceData = nullptr;
+
+static void NeutralizeDirectInputState(DWORD cbData, LPVOID lpvData) {
+  if (!lpvData || cbData == 0)
+    return;
+
+  ZeroMemory(lpvData, cbData);
+
+  if (cbData == sizeof(DIJOYSTATE)) {
+    DIJOYSTATE *state = static_cast<DIJOYSTATE *>(lpvData);
+    for (DWORD &pov : state->rgdwPOV)
+      pov = 0xFFFFFFFF;
+  } else if (cbData == sizeof(DIJOYSTATE2)) {
+    DIJOYSTATE2 *state = static_cast<DIJOYSTATE2 *>(lpvData);
+    for (DWORD &pov : state->rgdwPOV)
+      pov = 0xFFFFFFFF;
+  }
+}
 
 bool DInput8Proxy::Initialize() {
   char sysPath[MAX_PATH];
@@ -58,9 +76,11 @@ HRESULT WINAPI DInput8Proxy::Hooked_GetDeviceState(IDirectInputDevice8A *pDevice
                                                    DWORD cbData,
                                                    LPVOID lpvData) {
   HRESULT hr = oGetDeviceState(pDevice, cbData, lpvData);
-  if (SUCCEEDED(hr) && ImGuiManager::Get().IsVisible()) {
-    // Zero out the state so the game sees no input
-    memset(lpvData, 0, cbData);
+  bool toggledOverlay = false;
+  if (SUCCEEDED(hr))
+    toggledOverlay = HookManager::CaptureDirectInputState(cbData, lpvData);
+  if (SUCCEEDED(hr) && (ImGuiManager::Get().IsVisible() || toggledOverlay)) {
+    NeutralizeDirectInputState(cbData, lpvData);
   }
   return hr;
 }
@@ -69,7 +89,15 @@ HRESULT WINAPI DInput8Proxy::Hooked_GetDeviceData(
     IDirectInputDevice8A *pDevice, DWORD cbObjectData,
     LPDIDEVICEOBJECTDATA rgdod, LPDWORD pdwInOut, DWORD dwFlags) {
   HRESULT hr = oGetDeviceData(pDevice, cbObjectData, rgdod, pdwInOut, dwFlags);
-  if (SUCCEEDED(hr) && ImGuiManager::Get().IsVisible()) {
+  bool toggledOverlay = false;
+  if (SUCCEEDED(hr) && rgdod && pdwInOut) {
+    for (DWORD i = 0; i < *pdwInOut; ++i) {
+      toggledOverlay |=
+          HookManager::CaptureDirectInputButtonEvent(rgdod[i].dwOfs,
+                                                     rgdod[i].dwData);
+    }
+  }
+  if (SUCCEEDED(hr) && (ImGuiManager::Get().IsVisible() || toggledOverlay)) {
     // Report zero events so the game sees no buffered input
     if (pdwInOut)
       *pdwInOut = 0;
@@ -86,18 +114,32 @@ HRESULT WINAPI DInput8Proxy::Hooked_CreateDevice(
     void **vTable = *(void ***)pDevice;
 
     if (!oGetDeviceState) {
-      if (MH_CreateHook(vTable[9], &Hooked_GetDeviceState,
-                        (LPVOID *)&oGetDeviceState) == MH_OK) {
-        MH_EnableHook(vTable[9]);
-        LOG_INFO("Hooked IDirectInputDevice8::GetDeviceState");
+      MH_STATUS status = MH_CreateHook(vTable[9], &Hooked_GetDeviceState,
+                        (LPVOID *)&oGetDeviceState);
+      if (status == MH_OK) {
+        status = MH_EnableHook(vTable[9]);
+        if (status == MH_OK) {
+            LOG_INFO("Hooked IDirectInputDevice8::GetDeviceState");
+        } else {
+            LOG_ERR("Failed to enable IDirectInputDevice8::GetDeviceState hook (status: " + std::to_string(status) + ")");
+        }
+      } else {
+        LOG_ERR("Failed to create IDirectInputDevice8::GetDeviceState hook (status: " + std::to_string(status) + ")");
       }
     }
 
     if (!oGetDeviceData) {
-      if (MH_CreateHook(vTable[10], &Hooked_GetDeviceData,
-                        (LPVOID *)&oGetDeviceData) == MH_OK) {
-        MH_EnableHook(vTable[10]);
-        LOG_INFO("Hooked IDirectInputDevice8::GetDeviceData");
+      MH_STATUS status = MH_CreateHook(vTable[10], &Hooked_GetDeviceData,
+                        (LPVOID *)&oGetDeviceData);
+      if (status == MH_OK) {
+        status = MH_EnableHook(vTable[10]);
+        if (status == MH_OK) {
+            LOG_INFO("Hooked IDirectInputDevice8::GetDeviceData");
+        } else {
+            LOG_ERR("Failed to enable IDirectInputDevice8::GetDeviceData hook (status: " + std::to_string(status) + ")");
+        }
+      } else {
+        LOG_ERR("Failed to create IDirectInputDevice8::GetDeviceData hook (status: " + std::to_string(status) + ")");
       }
     }
   }

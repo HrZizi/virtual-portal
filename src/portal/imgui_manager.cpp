@@ -1,5 +1,6 @@
 #include "imgui_manager.h"
 #include "figure_manager.h"
+#include "hook_manager.h"
 #include "logging.h"
 #include "portal_state.h"
 #include "skylander_defs.h"
@@ -93,7 +94,8 @@ void ImGuiManager::Initialize(IDirect3DDevice9 *pDevice, HWND hWnd) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |=
+      ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
 
   // Load font at scaled size
   ImFontConfig fontCfg;
@@ -155,6 +157,7 @@ void ImGuiManager::Render(IDirect3DDevice9 *pDevice) {
 
   ImGui_ImplDX9_NewFrame();
   ImGui_ImplWin32_NewFrame();
+  HookManager::SubmitGamepadNavigation();
   ImGui::NewFrame();
 
   DrawPortalManager();
@@ -189,8 +192,7 @@ bool ImGuiManager::HandleWndProc(HWND hWnd, UINT msg, WPARAM wParam,
 
   // Toggle overlay with VK_INSERT
   if (msg == WM_KEYDOWN && wParam == VK_INSERT) {
-    m_visible = !m_visible;
-    LOG_INFO(std::string("ImGui overlay ") + (m_visible ? "shown" : "hidden"));
+    ToggleVisibility();
     return true;
   }
 
@@ -214,6 +216,15 @@ bool ImGuiManager::HandleWndProc(HWND hWnd, UINT msg, WPARAM wParam,
   return false;
 }
 
+void ImGuiManager::ToggleVisibility() {
+  if (!m_initialized)
+    return;
+
+  m_visible = !m_visible;
+  m_focusPortalWindow = m_visible;
+  LOG_INFO(std::string("ImGui overlay ") + (m_visible ? "shown" : "hidden"));
+}
+
 // ---------------------------------------------------------------------------
 // DrawPortalManager — Main overlay window
 // ---------------------------------------------------------------------------
@@ -224,12 +235,22 @@ void ImGuiManager::DrawPortalManager() {
                                       ImVec2(fixedWidth, -1));
   ImGui::SetNextWindowPos(ImVec2(20 * m_uiScale, 20 * m_uiScale),
                           ImGuiCond_FirstUseEver);
+  if (m_focusPortalWindow)
+    ImGui::SetNextWindowFocus();
 
   ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
   if (!ImGui::Begin("Virtual Portal Manager", &m_visible, flags)) {
     ImGui::End();
     return;
   }
+  if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight) ||
+      ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+    ToggleVisibility();
+    ImGui::End();
+    return;
+  }
+  bool setDefaultFocus = m_focusPortalWindow || ImGui::IsWindowAppearing();
+  m_focusPortalWindow = false;
 
   // Header separator
   ImGui::TextColored(ImVec4(0.65f, 0.45f, 0.90f, 1.0f),
@@ -240,7 +261,7 @@ void ImGuiManager::DrawPortalManager() {
   // Draw 3 slot cards
   for (int i = 0; i < 3; ++i) {
     ImGui::PushID(i);
-    DrawSlotCard(m_uiSlots[i]);
+    DrawSlotCard(m_uiSlots[i], setDefaultFocus && i == 0);
     ImGui::PopID();
     if (i < 2)
       ImGui::Spacing();
@@ -280,7 +301,7 @@ void ImGuiManager::DrawPortalManager() {
 // ---------------------------------------------------------------------------
 // DrawSlotCard — Renders a single slot as a styled card
 // ---------------------------------------------------------------------------
-void ImGuiManager::DrawSlotCard(UISlot &uiSlot) {
+void ImGuiManager::DrawSlotCard(UISlot &uiSlot, bool setDefaultFocus) {
   const FigureSlot &slot = FigureManager::Get().GetSlot(uiSlot.fmSlot);
 
   // Card background color
@@ -321,19 +342,27 @@ void ImGuiManager::DrawSlotCard(UISlot &uiSlot) {
 
     // --- Character Info (Below Slot Label) ---
     ImVec4 elemColor = GetElementColor(slot.element);
-    ImGui::TextColored(elemColor, "%s %s",
-                       GetElementEmoji(slot.element.c_str()),
-                       slot.char_name.c_str());
-    
-    // Make the character name clickable to swap
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-      ImGui::SetTooltip("Click to swap character");
-      if (ImGui::IsMouseClicked(0)) {
-        wantOpenSelector = true;
-      }
+    std::string characterButton =
+        std::string(GetElementEmoji(slot.element.c_str())) + " " +
+        slot.char_name;
+
+    ImGui::PushStyleColor(ImGuiCol_Text, elemColor);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(elemColor.x, elemColor.y, elemColor.z, 0.25f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImVec4(elemColor.x, elemColor.y, elemColor.z, 0.40f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+    if (ImGui::Button(characterButton.c_str(), ImVec2(-1, 30 * m_uiScale))) {
+      wantOpenSelector = true;
     }
-    
+    if (setDefaultFocus)
+      ImGui::SetItemDefaultFocus();
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Click to swap character");
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
+
     // Note: "(unsaved changes)" text removed per user request
   } else {
     // Empty: clickable area to open selector
@@ -348,6 +377,8 @@ void ImGuiManager::DrawSlotCard(UISlot &uiSlot) {
     if (ImGui::Button("Select Character...", ImVec2(-1, 30 * m_uiScale))) {
       wantOpenSelector = true;
     }
+    if (setDefaultFocus)
+      ImGui::SetItemDefaultFocus();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
   }
@@ -380,6 +411,12 @@ void ImGuiManager::DrawCharacterSelector(UISlot &uiSlot) {
 
   if (ImGui::BeginPopupModal(popupId, &uiSlot.selectorOpen,
                              ImGuiWindowFlags_NoResize)) {
+    bool setDefaultFocus = ImGui::IsWindowAppearing();
+    if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight) ||
+        ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+      uiSlot.selectorOpen = false;
+      ImGui::CloseCurrentPopup();
+    }
     ImGui::TextColored(ImVec4(0.65f, 0.45f, 0.90f, 1.0f),
                        "Choose a Skylander for %s", uiSlot.label);
     ImGui::Separator();
@@ -437,6 +474,10 @@ void ImGuiManager::DrawCharacterSelector(UISlot &uiSlot) {
             }
             uiSlot.selectorOpen = false;
             ImGui::CloseCurrentPopup();
+          }
+          if (setDefaultFocus) {
+            ImGui::SetItemDefaultFocus();
+            setDefaultFocus = false;
           }
           ImGui::PopStyleColor(3);
         }

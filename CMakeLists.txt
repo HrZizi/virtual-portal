@@ -56,7 +56,7 @@ add_library(dinput8 SHARED
     src/portal/dinput8_exports.def
 )
 
-target_link_libraries(dinput8 PRIVATE setupapi hid user32 d3d9)
+target_link_libraries(dinput8 PRIVATE setupapi hid user32 winmm d3d9)
 
 set_target_properties(dinput8 PROPERTIES 
     PREFIX ""

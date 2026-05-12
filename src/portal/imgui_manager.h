@@ -31,6 +31,7 @@ public:
 
   // Returns true if ImGui consumed the input event
   bool HandleWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+  void ToggleVisibility();
 
   bool IsVisible() const { return m_visible; }
   bool IsInitialized() const { return m_initialized; }
@@ -40,6 +41,7 @@ private:
 
   bool m_initialized = false;
   bool m_visible = false; // toggled by VK_INSERT
+  bool m_focusPortalWindow = false;
   float m_uiScale = 1.0f; // DPI scale based on 1080p height
 
   // UI slot state — maps to FigureManager slots 0, 1, 2
@@ -52,6 +54,6 @@ private:
 
   // Drawing methods
   void DrawPortalManager();
-  void DrawSlotCard(UISlot &slot);
+  void DrawSlotCard(UISlot &slot, bool setDefaultFocus = false);
   void DrawCharacterSelector(UISlot &slot);
 };

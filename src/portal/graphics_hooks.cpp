@@ -59,6 +59,34 @@ LRESULT CALLBACK GraphicsHooks::Hooked_WndProc(HWND hWnd, UINT uMsg, WPARAM wPar
     if (ImGuiManager::Get().HandleWndProc(hWnd, uMsg, wParam, lParam))
         return true;
 
+    // Aggressive input blackout for the game engine
+    if (ImGuiManager::Get().IsVisible()) {
+        switch (uMsg) {
+            case WM_INPUT: // Raw Input - critical for many modern engines
+            case WM_KEYDOWN:
+            case WM_KEYUP:
+            case WM_CHAR:
+            case WM_SYSKEYDOWN:
+            case WM_SYSKEYUP:
+            case WM_MOUSEMOVE:
+            case WM_LBUTTONDOWN:
+            case WM_LBUTTONUP:
+            case WM_LBUTTONDBLCLK:
+            case WM_RBUTTONDOWN:
+            case WM_RBUTTONUP:
+            case WM_RBUTTONDBLCLK:
+            case WM_MBUTTONDOWN:
+            case WM_MBUTTONUP:
+            case WM_MBUTTONDBLCLK:
+            case WM_MOUSEWHEEL:
+            case WM_MOUSEHWHEEL:
+            case WM_XBUTTONDOWN:
+            case WM_XBUTTONUP:
+            case WM_XBUTTONDBLCLK:
+                return 0; // Block from game engine
+        }
+    }
+
     if (Config::Get().GetBool("graphics", "borderless_window", false) && hWnd == g_hGameWindow) {
         switch (uMsg) {
             case WM_ACTIVATE: if (LOWORD(wParam) == WA_INACTIVE) return 0; break;
