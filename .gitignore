@@ -30,9 +30,15 @@ env/
 .env/
 
 # Project specific
+# Disassembly / import listings derived from the commercial game binary
+# stay local. Findings are summarized in docs instead.
 portal_disasm.txt
+imports.txt
 # portal_config.ini  # Keep this if it's a template, ignore if it contains local secrets/paths
 figures/*.sky
+
+# Local editor workspace file
+*.code-workspace
 
 .agent/*
 CURRENT_SPRINT.md
